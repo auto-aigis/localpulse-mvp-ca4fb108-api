@@ -4,14 +4,19 @@ from datetime import datetime, timedelta
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from sqlalchemy.orm import Session as DBSession
-from passlib.context import CryptContext
+import bcrypt
 from database import get_db
 from models import User, UserSession, EmailVerification, Subscription
 from schemas import LoginRequest, RegisterRequest, UserResponse, VerifyEmailRequest, ResendVerificationRequest, SubscriptionResponse
 from dependencies import get_current_user
 
 router = APIRouter(tags=["auth"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def _verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -57,7 +62,7 @@ async def register(req: RegisterRequest, response: Response, db: DBSession = Dep
     if existing:
         raise HTTPException(400, detail="Email already registered")
     
-    password_hash = pwd_context.hash(req.password)
+    password_hash = _hash_password(req.password)
     user = User(
         email=req.email,
         password_hash=password_hash,
@@ -96,7 +101,7 @@ async def register(req: RegisterRequest, response: Response, db: DBSession = Dep
 @router.post("/api/auth/login")
 async def login(req: LoginRequest, response: Response, db: DBSession = Depends(get_db)):
     user = db.query(User).filter_by(email=req.email).first()
-    if not user or not pwd_context.verify(req.password, user.password_hash):
+    if not user or not _verify_password(req.password, user.password_hash):
         raise HTTPException(401, detail="Invalid credentials")
     
     if not user.is_email_verified:
