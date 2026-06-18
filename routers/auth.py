@@ -47,7 +47,7 @@ def _send_verification_email(email: str, token: str):
     """
     
     try:
-        resend.Email.send({
+        resend.Emails.send({
             "from": "LocalPulse <noreply@localpulse.app>",
             "to": email,
             "subject": "Verify your email for LocalPulse",
